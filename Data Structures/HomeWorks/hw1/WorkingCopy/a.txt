@@ -1,0 +1,26 @@
+         ******************
+        *bcdeabcdeabcdeabca*
+       *bcdeabcdeabcdeabcdea*
+      *deabcdeabcdeabcdedeabc*
+     *cdeabcdeabcdeabcdabcdeab*
+    *deabcdeabcdeabcdeeabcdeabc*
+   *bcdeabcdeabcdeabcabcdeabcdea*
+  *bcdeabcdeabcdeabcdeabcdeabcdea*
+ *deabcdeabcdeabcdedeabcdeabcdeabc*
+************************************
+ *abcdeabcdeabcdeabcdeabcdeabcdeab*
+ *cdeabcdeabcdeabcdeabcdeabcdeabcd*
+ *eabcdeabcdeabcdeabcdeabcdeabcdea*
+ *bcdeabcdeabcdeabcdeabcdeabcdeabc*
+ *deabcdeabcdeabcdeabcdeabcdeabcde*
+ *abcdeabcdeabcdeabcdeabcdeabcdeab*
+ *cdeabcdeabcdeabcdeabcdeabcdeabcd*
+ *eabcdeabcdeabcdeabcdeabcdeabcdea*
+ *bcdeabcdeabcdeabcdeabcdeabcdeabc*
+ **********************************
+            *deabcdeabcde*
+             *abcdeabcdeab*
+              *cdeabcdeabcd*
+               *eabcdeabcdea*
+                *bcdeabcdeabc*
+                 *deabcdeabcde*

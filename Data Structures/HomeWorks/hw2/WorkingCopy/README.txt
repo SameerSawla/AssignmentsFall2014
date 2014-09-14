@@ -1,0 +1,23 @@
+HOMEWORK 2: BOWLING CLASSES
+
+
+NAME: Sameer Sawla
+
+
+COLLABORATORS AND OTHER RESOURCES:
+Anand Sahu
+
+
+ESTIMATE OF # OF HOURS SPENT ON THIS ASSIGNMENT:  20
+
+
+
+DESCRIPTION OF YOUR CREATIVE STATISTIC:
+I was born creative but education ruined me :P 
+
+
+
+MISC. COMMENTS TO GRADER:  
+This was a good assignment.
+
+
