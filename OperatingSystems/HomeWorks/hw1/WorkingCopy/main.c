@@ -122,19 +122,20 @@ void executeWithAChildProcessBackground(char *input,char *tokens,char inputArray
 		perror("SamShell: ERROR : 'execlp() failed\n");
 
 	}
-	// if(pid>0) //Parent process
-	// {
-	// 	int status;
-	// 	int child_pid = wait( &status);
-	// 	if(WIFSIGNALED(status))
-	// 	{
-	// 		printf("\n Abnormal Termination\n");
-	// 	}
-	// 	else if(WIFEXITED(status))
-	// 	{
-	// 		int rc = WEXITSTATUS(status);
-	// 	}
-	// }
+	if(pid>0) //Parent process
+	{
+		printf("\n[process running in background with pid %d]\n",(int)pid);
+		int status;
+		int child_pid = waitpid(pid,&status,WNOHANG);
+		if(child_pid>0)
+		{
+				if(WIFEXITED(status))
+				{
+				 printf("\n[process %d completed]\n",(int)pid);	
+				}
+		}	
+		
+	}
 }
 
 void executeWithAChildProcessForeground(char *input,char *tokens,char inputArray[][100],int inputArrayCount)
@@ -220,7 +221,6 @@ void searchInMyPath(char *input,char inputArray[][100],int inputArrayCount)
 		}
 		if(found)
 		{
-			printf("\na%sa\n",inputArray[inputArrayCount-1]);
 			if(strncmp(inputArray[inputArrayCount-1],"&",1)==0)
 			{
 				executeWithAChildProcessBackground(input,tokens,inputArray,inputArrayCount);
@@ -351,6 +351,7 @@ int main()
 	 			}
 	 			char* temp = searchHistoryUsingNumber(calculatedNumber,&historyPointerLocation,&noOfElementsInHistory,history);
 	 			strcpy(input,temp);
+	 			splitCommandAndArgs(input,&inputArrayCount,inputArray);
 	 			searchInMyPath(input,inputArray,inputArrayCount);
 	 			continue;
 	 		}
@@ -380,6 +381,7 @@ int main()
  					temp = history[noOfElementsInHistory-1];
  				}
 	 			strcpy(input,temp);
+	 			splitCommandAndArgs(input,&inputArrayCount,inputArray);
 	 			if(strncmp(input,HISTORY,7)==0)
 	 			{
 	 				printHistory(history,&historyPointerLocation,&noOfElementsInHistory);
@@ -399,7 +401,14 @@ int main()
  	searchInMyPath(input,inputArray,inputArrayCount);
 
  	if(historyPointerLocation>3){historyPointerLocation=0;}
- 	printf("\nSaving in the history : %s\n",input);
+ 	if(inputArrayCount!=0)
+ 	{
+ 		for(i=0;i<inputArrayCount;i++)
+ 		{
+ 			strcat(input," ");
+ 			strcat(input,inputArray[i]);
+ 		}
+ 	}
  	strcpy(history[historyPointerLocation],input);
  	// if(historyPointerLocation>998){historyPointerLocation=0;}	
  	historyPointerLocation=historyPointerLocation + 1;
