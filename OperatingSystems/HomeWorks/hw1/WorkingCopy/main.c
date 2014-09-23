@@ -4,6 +4,7 @@
 #include<dirent.h>
 #include<sys/types.h>
 #include<sys/stat.h>
+#include<fcntl.h>
 #include<unistd.h>
 #include<errno.h>
 
@@ -14,6 +15,41 @@
 #define true 1
 #define false 0
 
+int searchForPiping(char inputArray[][100],int *inputArrayCount)
+{
+	int i=0;
+	for(i;i<*inputArrayCount;i++)
+	{	
+		if(strncmp(inputArray[i],"|",1)==0)
+		{
+			return 1;
+		}
+	}
+ 	return false; 
+}
+
+
+int searchForRedirection(char inputArray[][100],int *inputArrayCount)
+{
+	int i=0;
+	for(i;i<*inputArrayCount;i++)
+	{
+		if(strncmp(inputArray[i],"<",1)==0)
+		{
+			return 1;
+		}
+		if(strncmp(inputArray[i],">>",2)==0)
+		{	
+			return 3;
+		}
+		if(strncmp(inputArray[i],">",1)==0)
+		{
+			return 2;
+		}
+		
+	}
+ 	return false; 
+}
 void printHistory(char history[4][1000],int *historyPointerLocation, int *noOfElementsInHistory)
 {		
 	int lineNumber = 1;
@@ -104,20 +140,18 @@ void executeWithAChildProcessBackground(char *input,char *tokens,char inputArray
 	if(pid<0)
 	{
 		perror("SamShell: ERROR : 'fork() failed");
-		return EXIT_FAILURE;
 	}
 	if(pid==0) //Child Process
 	{
 		sleep(2);
 		printf("\n");
-		int rc;
 		if(inputArrayCount>0)
 		{
-			rc = execlp(full,input,inputArray,NULL);
+			execlp(full,input,inputArray,NULL);
 		}	
 		else
 		{
-			rc = execlp(full,input,NULL);
+			execlp(full,input,NULL);
 		}
 		perror("SamShell: ERROR : 'execlp() failed\n");
 
@@ -140,7 +174,7 @@ void executeWithAChildProcessBackground(char *input,char *tokens,char inputArray
 
 void executeWithAChildProcessForeground(char *input,char *tokens,char inputArray[][100],int inputArrayCount)
 {	//input[1] = NULL;
-	pid_t pid;
+		pid_t pid;
 	pid = fork();
 	int n = strlen(input) + strlen(tokens);
 	char full[n];
@@ -150,35 +184,24 @@ void executeWithAChildProcessForeground(char *input,char *tokens,char inputArray
 	if(pid<0)
 	{
 		perror("SamShell: ERROR : 'fork() failed");
-		return EXIT_FAILURE;
 	}
 	if(pid==0) //Child Process
 	{
 		printf("\n");
-		int rc;
 		if(inputArrayCount>0)
 		{
-			rc = execlp(full,input,inputArray,NULL);
+			execlp(full,input,inputArray,NULL);
 		}	
 		else
 		{
-			rc = execlp(full,input,NULL);
+			execlp(full,input,NULL);
 		}
 		perror("SamShell: ERROR : 'execlp() failed\n");
 
 	}
 	if(pid>0) //Parent process
 	{
-		int status;
-		int child_pid = wait( &status);
-		if(WIFSIGNALED(status))
-		{
-			printf("\n Abnormal Termination\n");
-		}
-		else if(WIFEXITED(status))
-		{
-			int rc = WEXITSTATUS(status);
-		}
+		//Something to be done.
 	}
 	
 }
@@ -277,18 +300,13 @@ int getArgumentLength(char input[1000])
 
 void splitCommandAndArgs(char input[1000],int *inputArrayCount,char inputArray[][100])
 {
- int i=0;
- // printf("\nInput : %s\n",input);
 
  char temp2[1000];
  strcpy(temp2,input);
  char *tokens = strtok(temp2," ");
  strcpy(input,temp2);
- // printf("\nTokens1 : %s\n",tokens);
- 
 
  tokens = strtok(NULL," ");
- // printf("\nTokens2 : %s\n",tokens);
  while(tokens!=NULL)
  {	
  	char *inputMe = tokens;
@@ -297,12 +315,345 @@ void splitCommandAndArgs(char input[1000],int *inputArrayCount,char inputArray[]
  	tokens = strtok(NULL," ");
  }
 
- // for(i;i<*inputArrayCount;i++)
- // {
- // 	printf("\n%s\n",inputArray[i]);
- // }
-
  
+}
+
+char * searchThePathForInput(char input[100])
+{
+	int found = false;
+	char *inputEnvVariable = getenv("MYPATH");
+
+	if(inputEnvVariable==NULL)
+	{
+		printf("\nMYPATH environment variable not set. Setting it\n");
+		setenv("MYPATH","/bin:.",1);
+		inputEnvVariable = getenv("MYPATH");
+	}
+
+	char *tokens = strtok(inputEnvVariable,":");
+	while(tokens!=NULL)
+	{
+		DIR * dir = opendir(tokens); // Pointing to the first entry in the directory
+
+		if(dir == NULL)
+		{
+			perror("SamShell: ERROR : 'opendir()' failed");
+			// return EXIT_FAILURE;
+		}
+
+		struct dirent * file;
+
+		while((file=readdir(dir))!=NULL)
+    	{
+    		if(strlen(input) == strlen(file->d_name))
+	    	{
+	    		// check whether name is a file type and not a directory
+	    		if(strncmp(file->d_name,input,strlen(file->d_name))==0)
+	    		{
+	    			found = true;
+	    		}
+    		}
+
+		}
+		if(found)
+		{
+			closedir(dir);
+			return tokens;
+		}
+		closedir(dir);
+		tokens = strtok(NULL,":");
+	}
+	if(!found)
+	{
+		fprintf(stderr,"SamShell: ERROR : '%s' command not found\n",input);
+		return "null";
+	}
+	return "null";
+}
+
+void executeRightOneRedirectionForeGround(char *full,char* input,char *half2,char firstHalfArray[][100], int firstHalfArrayCt)
+{
+	char* fileName = removeWhiteSpace(half2);
+ 	int copyFD = dup(1);
+ 	
+    close(1);
+    open(fileName, O_WRONLY | O_CREAT | O_TRUNC,0660);
+
+	pid_t pid;
+	pid = fork();
+	
+	if(pid<0)
+	{
+		perror("SamShell: ERROR : 'fork() failed");
+	}
+	if(pid==0) //Child Process
+	{		
+		if(firstHalfArrayCt>0)
+		{
+			execlp(full,input,firstHalfArray,NULL);
+		}
+		else
+		{
+			execlp(full,input,NULL);
+		}
+		perror("SamShell: ERROR : 'execlp() failed\n");
+
+	}
+	if(pid>0) //Parent process
+	{
+			wait(NULL);
+			dup2(copyFD,1);
+	}
+}
+
+void executeLeftRedirectionForeGround(char *full,char* input,char *half2,char firstHalfArray[][100], int firstHalfArrayCt)
+{
+	char* fileName = removeWhiteSpace(half2);
+ 	int copyFD = dup(0);
+ 	// close(0);
+	int fd = open(fileName, O_RDONLY | O_CREAT ,0660);
+	dup2(fd,0);
+	close(fd);
+
+ 	pid_t pid;
+	pid = fork();
+	
+	if(pid<0)
+	{
+		perror("SamShell: ERROR : 'fork() failed");
+	}
+	if(pid==0) //Child Process
+	{		
+		if(firstHalfArrayCt>0)
+		{
+			execlp(full,input,firstHalfArray,NULL);	
+		}
+		else
+		{
+			execlp(full,input,NULL);	
+		}
+	}
+	if(pid>0) //Parent process
+	{
+			wait(NULL);
+			dup2(copyFD,0);
+	}
+}
+
+
+void executeRightTwoRedirectionForeGround(char *full,char* input,char *half2,char firstHalfArray[][100], int firstHalfArrayCt)
+{
+	char* fileName = removeWhiteSpace(half2);
+ 	int copyFD = dup(1);
+ 	
+    close(1);
+    open(fileName, O_WRONLY | O_CREAT | O_APPEND,0660);
+
+	pid_t pid;
+	pid = fork();
+	
+	if(pid<0)
+	{
+		perror("SamShell: ERROR : 'fork() failed");
+	}
+	if(pid==0) //Child Process
+	{		
+		if(firstHalfArrayCt>0)
+		{
+			execlp(full,input,firstHalfArray,NULL);
+		}
+		else
+		{
+			execlp(full,input,NULL);
+		}
+		perror("SamShell: ERROR : 'execlp() failed\n");
+
+	}
+	if(pid>0) //Parent process
+	{
+			wait(NULL);
+			dup2(copyFD,1);
+	}
+}
+
+void redirectionExecution(char *input,char inputArray[][100],int *inputArrayCount,int *redirectQ)
+{
+
+ char operator[2];	
+ int firstHalfArrayCt = 0;
+ char half2[100];
+ int i=0;
+ int cmpCount=1;
+
+ if(*redirectQ == 1)
+ {
+ 	strcpy(operator,"<");
+ }
+ if(*redirectQ == 2)
+ {
+ 	strcpy(operator,">");
+ }
+ if(*redirectQ == 3)
+ {
+ 	cmpCount = 2;
+ 	strcpy(operator,">>");
+ }
+
+ for(i;i<*inputArrayCount;i++)
+ {
+ 	if(strncmp(inputArray[i],operator,cmpCount)==0)
+ 	{
+ 		break;
+ 	}
+ 	firstHalfArrayCt++;
+ }
+ 
+ char firstHalfArray[firstHalfArrayCt][100];
+
+ strcpy(half2,"");
+ for(i=0;i<*inputArrayCount;i++)
+ {
+ 	if(strncmp(inputArray[i],operator,cmpCount)==0)
+ 	{
+ 		i++;
+ 		break;
+ 	}
+ 	strcpy(firstHalfArray[i],inputArray[i]);
+ }
+ 
+ for(i;i<*inputArrayCount;i++)
+ {
+ 	strcat(half2,inputArray[i]);
+ }
+ 
+ char *tokens = searchThePathForInput(input);
+ if(strncmp(tokens,"null",4)!=0)
+ {
+    int n = strlen(input) + strlen(tokens);
+	char full[n];
+	strcpy(full,tokens);
+	strcat(full,"/");
+	strcat(full,input);
+
+	if(cmpCount==2)
+	{
+		executeRightTwoRedirectionForeGround(full,input,half2,firstHalfArray,firstHalfArrayCt);
+	}
+	else if(cmpCount==1)
+		  {
+		  	if(strncmp(operator,">",1)==0)
+		  	{
+    			executeRightOneRedirectionForeGround(full,input,half2,firstHalfArray,firstHalfArrayCt);
+		  	}
+		  	if(strncmp(operator,"<",1)==0)
+		  	{
+    			executeLeftRedirectionForeGround(full,input,half2,firstHalfArray,firstHalfArrayCt);
+            }
+ 		  }
+ }
+}
+void pipeImplementation(char *input,char argsOne[][100], int *argsOneCount, char *token1, char *input2, char argsTwo[][100],int *argsTwoCount,char *token2)
+{
+ 	int p[2],status;
+	pid_t child1;
+	pid_t child = fork();
+
+	if(child==0)
+	{
+		pipe(p);
+		pid_t childInner = fork();
+
+		if(childInner==0)
+		{
+			dup2(p[1],1);
+			close(p[1]);
+			close(p[0]);
+			if(*argsOneCount>0)
+			{
+				execlp(token1,input,argsOne,NULL);
+			}
+			else
+			{
+				execlp(token1,input,NULL);
+			}
+		}
+		else
+		{
+			pid_t a = wait(&status);
+			dup2(p[0],0);
+			close(p[0]);
+			close(p[1]);
+			if(*argsTwoCount>0)
+			{
+				execlp(token2,input2,argsTwo,NULL);
+			}
+			else
+			{
+				execlp(token2,input2,NULL);
+			}
+		}
+		
+	}
+	else
+	{
+		wait(NULL);
+	}
+
+	waitpid(child1, &status, WUNTRACED);
+}
+
+void pipingExecution(char *input,char inputArray[][100],int *inputArrayCount)
+{
+ char input2[1000],token1[1000],token2[1000];
+ int argsOneCount = 0,argsTwoCount = *inputArrayCount-1,i=0, j=0;;
+ for(i;i<*inputArrayCount;i++)
+ {
+ 	if(strncmp(inputArray[i],"|",1)==0)
+ 	{
+ 		break;
+ 	}
+ 	argsOneCount++;
+ 	argsTwoCount--;
+ }
+
+ char oneArgs[argsOneCount][100], twoArgs[argsTwoCount][100];
+
+ for(i=0;i<argsOneCount;i++)
+ {
+ 	if(strncmp(inputArray[i],"|",1)==0)
+ 	{
+ 		break;
+ 	}
+ 	strcpy(oneArgs[i],inputArray[i]);
+ }
+ i++;
+ for(i,j;j<argsTwoCount;i++,j++)
+ {
+ 	strcpy(twoArgs[j],inputArray[i]);
+ }
+ char *token;
+ token = searchThePathForInput(input);
+ strcpy(token1,token);
+ token = searchThePathForInput(twoArgs[0]); 
+ strcpy(token2,token);
+
+ strcpy(input2,twoArgs[0]);
+ char argsTwoFinal[argsTwoCount-1][100];
+ for(i=1,j=0;i<argsTwoCount;i++,j++)
+ {
+  strcpy(argsTwoFinal[j],twoArgs[i]);
+ }
+ argsTwoCount = argsTwoCount - 1;
+
+ if(strncmp(token1,"null",4)!=0 && strncmp(token2,"null",4)!=0)
+ {
+ 	strcat(token1,"/");
+ 	strcat(token1,input);
+
+ 	strcat(token2,"/");
+ 	strcat(token2,input2);
+ 	pipeImplementation(input,oneArgs,&argsOneCount,token1,input2,argsTwoFinal,&argsTwoCount,token2);
+ }
 }
 
 int main()
@@ -326,7 +677,32 @@ int main()
  	int inputArrayCount = 0,i=0;
 
  	splitCommandAndArgs(input,&inputArrayCount,inputArray);
- 	// strcpy(inputArray[inputArrayCount],NULL);
+ 	// strcpy(inputArray[inputArrayCount],NULL); // can be replaced by "" ?
+ 	int redirectQ = searchForRedirection(inputArray,&inputArrayCount);
+ 	if(redirectQ!=0)
+ 	{
+ 		printf("\ninput %s\n",input);
+ 		redirectionExecution(input, inputArray,&inputArrayCount,&redirectQ);
+ 		printf("\ninput %s\n",input);
+ 		continue;
+ 	}
+
+ 	int pipeQ = searchForPiping(inputArray,&inputArrayCount);
+ 	if(pipeQ==1)
+ 	{
+ 		pipingExecution(input,inputArray,&inputArrayCount);
+ 		int i=0;
+ 		for(i;i<inputArrayCount;i++)
+ 		{
+ 			strcat(input," ");
+ 			strcat(input,inputArray[i]);
+ 		}
+ 		printf("\nhist %s\n",history[historyPointerLocation-1]);
+ 		printf("\nhist2 %s\n",history[historyPointerLocation]);
+ 		strcpy(history[historyPointerLocation],input);
+ 		printf("\nhist3 %s\n",history[historyPointerLocation]);
+ 		continue;
+ 	}
  	if((strlen(input))==4)
  	{
 	 	if(strncmp(input,EXIT,4)==0 || strncmp(input,QUIT,4)==0 )
@@ -424,11 +800,7 @@ int main()
 	 		continue;
 	 	}
  	}
-
- 
-
-
- 	
+	
  }
  return EXIT_SUCCESS;
  
