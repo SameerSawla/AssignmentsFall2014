@@ -101,24 +101,26 @@ void printHistory(char history[4][1000],int *historyPointerLocation, int *noOfEl
  				printf("%d\t%s\n",lineNumber,history[i]);
  			}
  		}
- 		// printf("%d\t%s\n",lineNumber,history[i]);
  		lineNumber = lineNumber + 1;
  	}
 }
 
 char* searchHistoryUsingNumber(int number,int *historyPointerLocation,int *noOfElementsInHistory,char history[999][1000])
 {
+
  if(number <= *noOfElementsInHistory)
  {	
 	 if(*historyPointerLocation!=*noOfElementsInHistory)
 	 {
 	  number = number + *historyPointerLocation-1;
+	  if(number>=*noOfElementsInHistory)
+	  {
+	 	number = number - *noOfElementsInHistory;
+	  }
+	  return history[number];
 	 }
 
-	 if(number>*noOfElementsInHistory)
-	 {
-	 	number = number - *noOfElementsInHistory;
-	 }
+	 
  	 return history[number-1];
  }
  else
@@ -201,8 +203,9 @@ void executeWithAChildProcessForeground(char *input,char *tokens,char inputArray
 	}
 	if(pid>0) //Parent process
 	{
-		//Something to be done.
-	}
+		wait(NULL);
+		printf("\n");
+ 	}
 	
 }
 void searchInMyPath(char *input,char inputArray[][100],int inputArrayCount)
@@ -247,10 +250,12 @@ void searchInMyPath(char *input,char inputArray[][100],int inputArrayCount)
 			if(strncmp(inputArray[inputArrayCount-1],"&",1)==0)
 			{
 				executeWithAChildProcessBackground(input,tokens,inputArray,inputArrayCount);
+				printf("\nBackEnd\n");
 			}
 			else
 			{
 				executeWithAChildProcessForeground(input,tokens,inputArray,inputArrayCount);
+				printf("\nForeEnd\n");
 			}
 			break;
 		}
@@ -678,12 +683,28 @@ int main()
 
  	splitCommandAndArgs(input,&inputArrayCount,inputArray);
  	// strcpy(inputArray[inputArrayCount],NULL); // can be replaced by "" ?
+
+ 	if(input[0]=='\0')
+ 	{
+ 		continue;
+ 	}
+
  	int redirectQ = searchForRedirection(inputArray,&inputArrayCount);
  	if(redirectQ!=0)
  	{
- 		printf("\ninput %s\n",input);
  		redirectionExecution(input, inputArray,&inputArrayCount,&redirectQ);
- 		printf("\ninput %s\n",input);
+		int i=0;
+ 		for(i;i<inputArrayCount;i++)
+ 		{
+ 			strcat(input," ");
+ 			strcat(input,inputArray[i]);
+ 		}
+ 		strcpy(history[historyPointerLocation],input);
+ 		historyPointerLocation=historyPointerLocation + 1;
+ 		if(noOfElementsInHistory!=4)
+ 		{
+ 			noOfElementsInHistory = noOfElementsInHistory+1;
+ 		}
  		continue;
  	}
 
@@ -697,15 +718,24 @@ int main()
  			strcat(input," ");
  			strcat(input,inputArray[i]);
  		}
- 		printf("\nhist %s\n",history[historyPointerLocation-1]);
- 		printf("\nhist2 %s\n",history[historyPointerLocation]);
  		strcpy(history[historyPointerLocation],input);
- 		printf("\nhist3 %s\n",history[historyPointerLocation]);
+ 		historyPointerLocation=historyPointerLocation + 1;
+ 		if(noOfElementsInHistory!=4)
+ 		{
+ 			noOfElementsInHistory = noOfElementsInHistory+1;
+ 		}
  		continue;
  	}
  	if((strlen(input))==4)
  	{
-	 	if(strncmp(input,EXIT,4)==0 || strncmp(input,QUIT,4)==0 )
+ 		char temporary[1000];
+ 		strcpy(temporary,input);
+ 		int i=0;
+ 		for(i;i<strlen(temporary);i++)
+ 		{
+ 			temporary[i] = tolower(temporary[i]);
+ 		}
+	 	if(strncmp(temporary,EXIT,4)==0 || strncmp(temporary,QUIT,4)==0 )
 	 	{
 	 		printf("\n");
 	 		printf(BYE);
@@ -728,6 +758,54 @@ int main()
 	 			char* temp = searchHistoryUsingNumber(calculatedNumber,&historyPointerLocation,&noOfElementsInHistory,history);
 	 			strcpy(input,temp);
 	 			splitCommandAndArgs(input,&inputArrayCount,inputArray);
+	 			if(strlen(input)==7)
+ 				{
+		 			if(strncmp(input,HISTORY,7)==0)
+		 			{
+		 			 printHistory(history,&historyPointerLocation,&noOfElementsInHistory);
+		 			 continue;
+		 			}
+ 				}
+
+ 				int redirectQIn = searchForRedirection(inputArray,&inputArrayCount);
+			 	if(redirectQIn!=0)
+			 	{
+			 		redirectionExecution(input, inputArray,&inputArrayCount,&redirectQIn);
+					int i=0;
+			 		for(i;i<inputArrayCount;i++)
+			 		{
+			 			strcat(input," ");
+			 			strcat(input,inputArray[i]);
+			 		}
+			 		strcpy(history[historyPointerLocation],input);
+			 		historyPointerLocation=historyPointerLocation + 1;
+			 		if(noOfElementsInHistory!=4)
+			 		{
+			 			noOfElementsInHistory = noOfElementsInHistory+1;
+			 		}
+			 		continue;
+			 	}
+
+			 	int pipeQIn = searchForPiping(inputArray,&inputArrayCount);
+			 	if(pipeQIn==1)
+			 	{
+			 		pipingExecution(input,inputArray,&inputArrayCount);
+			 		int i=0;
+			 		for(i;i<inputArrayCount;i++)
+			 		{
+			 			strcat(input," ");
+			 			strcat(input,inputArray[i]);
+			 		}
+			 		strcpy(history[historyPointerLocation],input);
+			 		historyPointerLocation=historyPointerLocation + 1;
+			 		if(noOfElementsInHistory!=4)
+			 		{
+			 			noOfElementsInHistory = noOfElementsInHistory+1;
+			 		}
+			 		continue;
+			 	}
+
+
 	 			searchInMyPath(input,inputArray,inputArrayCount);
 	 			continue;
 	 		}
@@ -763,6 +841,45 @@ int main()
 	 				printHistory(history,&historyPointerLocation,&noOfElementsInHistory);
 	 				continue;
 	 			}
+
+	 			 				int redirectQIn = searchForRedirection(inputArray,&inputArrayCount);
+			 	if(redirectQIn!=0)
+			 	{
+			 		redirectionExecution(input, inputArray,&inputArrayCount,&redirectQIn);
+					int i=0;
+			 		for(i;i<inputArrayCount;i++)
+			 		{
+			 			strcat(input," ");
+			 			strcat(input,inputArray[i]);
+			 		}
+			 		strcpy(history[historyPointerLocation],input);
+			 		historyPointerLocation=historyPointerLocation + 1;
+			 		if(noOfElementsInHistory!=4)
+			 		{
+			 			noOfElementsInHistory = noOfElementsInHistory+1;
+			 		}
+			 		continue;
+			 	}
+
+			 	int pipeQIn = searchForPiping(inputArray,&inputArrayCount);
+			 	if(pipeQIn==1)
+			 	{
+			 		pipingExecution(input,inputArray,&inputArrayCount);
+			 		int i=0;
+			 		for(i;i<inputArrayCount;i++)
+			 		{
+			 			strcat(input," ");
+			 			strcat(input,inputArray[i]);
+			 		}
+			 		strcpy(history[historyPointerLocation],input);
+			 		historyPointerLocation=historyPointerLocation + 1;
+			 		if(noOfElementsInHistory!=4)
+			 		{
+			 			noOfElementsInHistory = noOfElementsInHistory+1;
+			 		}
+			 		continue;
+			 	}
+
 	 			searchInMyPath(input,inputArray,inputArrayCount);
 	 			continue;
  			}
@@ -800,6 +917,8 @@ int main()
 	 		continue;
 	 	}
  	}
+
+ 	
 	
  }
  return EXIT_SUCCESS;

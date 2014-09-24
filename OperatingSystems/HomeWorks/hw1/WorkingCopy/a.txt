@@ -1,0 +1,5 @@
+a.out
+a.txt
+helper.h
+main.c
+test.c
