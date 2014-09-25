@@ -1,5 +1,6 @@
 a.out
 a.txt
+cat.txt
 helper.h
 main.c
 test.c

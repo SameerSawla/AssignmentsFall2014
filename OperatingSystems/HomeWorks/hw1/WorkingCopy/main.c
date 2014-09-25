@@ -4,9 +4,15 @@
 #include<dirent.h>
 #include<sys/types.h>
 #include<sys/stat.h>
+#include <sys/time.h>
+#include <sys/resource.h>
+#include <sys/wait.h>
 #include<fcntl.h>
 #include<unistd.h>
 #include<errno.h>
+#include<signal.h>
+#include<ctype.h>
+
 
 #define BYE "Bye"
 #define HISTORY "history"
@@ -15,10 +21,22 @@
 #define true 1
 #define false 0
 
+void childTermination()
+{
+		int stat;
+		pid_t	pid;
+
+		while((pid = waitpid(-1,&stat,WNOHANG))>0)
+		{
+			printf("[Process %d completed]\n",pid);
+		}
+		return;
+}
+
 int searchForPiping(char inputArray[][100],int *inputArrayCount)
 {
 	int i=0;
-	for(i;i<*inputArrayCount;i++)
+	for(;i<*inputArrayCount;i++)
 	{	
 		if(strncmp(inputArray[i],"|",1)==0)
 		{
@@ -32,7 +50,7 @@ int searchForPiping(char inputArray[][100],int *inputArrayCount)
 int searchForRedirection(char inputArray[][100],int *inputArrayCount)
 {
 	int i=0;
-	for(i;i<*inputArrayCount;i++)
+	for(;i<*inputArrayCount;i++)
 	{
 		if(strncmp(inputArray[i],"<",1)==0)
 		{
@@ -75,7 +93,7 @@ void printHistory(char history[4][1000],int *historyPointerLocation, int *noOfEl
  		i = *historyPointerLocation+1;
  	}
  	
- 	for(i;i!=*historyPointerLocation;i++)
+ 	for(;i!=*historyPointerLocation;i++)
  	{	
  		if(i>=*noOfElementsInHistory)
  		{
@@ -129,27 +147,78 @@ char* searchHistoryUsingNumber(int number,int *historyPointerLocation,int *noOfE
  }
 }
 
+
+char *searchHistoryUsingPrefix(char *prefix,int *historyPointerLocation,int *noOfElementsInHistory,char history[999][1000])
+{
+		 if(*noOfElementsInHistory==0)
+		 {
+		 	fprintf(stderr, " ERROR : No elements in the history\n");
+		 	return "";
+		 }	
+		 int isFull = 0;
+		 int i=0;
+		 if(*noOfElementsInHistory==999)
+		 {
+		 	isFull=1;
+		 }
+		 
+		 for(i=*historyPointerLocation-1;i>-1;i--)
+		 {
+		 	if(strncmp(history[i],prefix,strlen(prefix))==0)
+		 	{
+		 		return history[i];
+		 	}
+		 }
+		 if(i==-1 && isFull)
+		 {
+		 	i=*noOfElementsInHistory-1;
+		 	for(;i>=*historyPointerLocation;i--)
+		 	{
+		 		if(strncmp(prefix,history[i],strlen(prefix))==0)
+		 		{
+		 			return history[i];
+		 		}
+		 	}
+		 }
+		 else
+		 {
+		 	return "";
+		 }
+}
 void executeWithAChildProcessBackground(char *input,char *tokens,char inputArray[][100],int inputArrayCount)
 {
-	printf("\nIn Background\n");
+	
 	pid_t pid;
+	int childPid;
 	pid = fork();
 	int n = strlen(input) + strlen(tokens);
 	char full[n];
 	strcpy(full,tokens);
 	strcat(full,"/");
 	strcat(full,input);
+	signal(SIGCHLD, childTermination);
 	if(pid<0)
 	{
 		perror("SamShell: ERROR : 'fork() failed");
 	}
 	if(pid==0) //Child Process
-	{
-		sleep(2);
-		printf("\n");
+	{	
+		childPid  = (int)getpid();
+		printf("\n[process running in background with pid %d]\n",childPid);
 		if(inputArrayCount>0)
 		{
-			execlp(full,input,inputArray,NULL);
+			char * ptr = full;
+			char * ptr1[100];
+			ptr1[0] = input;
+			int i=1;
+
+			for(;i<inputArrayCount;i++)
+			{
+			 ptr1[i] =	inputArray[i-1];
+			}
+			ptr1[i] = NULL;
+			i=0;
+			execv(full,ptr1);
 		}	
 		else
 		{
@@ -160,29 +229,19 @@ void executeWithAChildProcessBackground(char *input,char *tokens,char inputArray
 	}
 	if(pid>0) //Parent process
 	{
-		printf("\n[process running in background with pid %d]\n",(int)pid);
-		int status;
-		int child_pid = waitpid(pid,&status,WNOHANG);
-		if(child_pid>0)
-		{
-				if(WIFEXITED(status))
-				{
-				 printf("\n[process %d completed]\n",(int)pid);	
-				}
-		}	
-		
 	}
 }
 
 void executeWithAChildProcessForeground(char *input,char *tokens,char inputArray[][100],int inputArrayCount)
-{	//input[1] = NULL;
-		pid_t pid;
+{	
+	pid_t pid;
 	pid = fork();
 	int n = strlen(input) + strlen(tokens);
 	char full[n];
 	strcpy(full,tokens);
 	strcat(full,"/");
 	strcat(full,input);
+	char *arguments;
 	if(pid<0)
 	{
 		perror("SamShell: ERROR : 'fork() failed");
@@ -192,7 +251,16 @@ void executeWithAChildProcessForeground(char *input,char *tokens,char inputArray
 		printf("\n");
 		if(inputArrayCount>0)
 		{
-			execlp(full,input,inputArray,NULL);
+			char * ptr = full;
+			char * ptr1[100];
+			ptr1[0] = input;
+			int i=1;
+			for(;i<=inputArrayCount;i++)
+			{
+			 ptr1[i] =	inputArray[i-1];
+			}
+			ptr1[i] = NULL;
+			execv(full,ptr1);
 		}	
 		else
 		{
@@ -249,13 +317,12 @@ void searchInMyPath(char *input,char inputArray[][100],int inputArrayCount)
 		{
 			if(strncmp(inputArray[inputArrayCount-1],"&",1)==0)
 			{
+				printf("\nIn background\n");
 				executeWithAChildProcessBackground(input,tokens,inputArray,inputArrayCount);
-				printf("\nBackEnd\n");
 			}
 			else
 			{
 				executeWithAChildProcessForeground(input,tokens,inputArray,inputArrayCount);
-				printf("\nForeEnd\n");
 			}
 			break;
 		}
@@ -305,11 +372,16 @@ int getArgumentLength(char input[1000])
 
 void splitCommandAndArgs(char input[1000],int *inputArrayCount,char inputArray[][100])
 {
-
  char temp2[1000];
  strcpy(temp2,input);
  char *tokens = strtok(temp2," ");
  strcpy(input,temp2);
+ 
+ if(*inputArrayCount!=0)
+ {
+  memset(&inputArray[0], 0, *inputArrayCount);
+  *inputArrayCount = 0;
+ }
 
  tokens = strtok(NULL," ");
  while(tokens!=NULL)
@@ -319,8 +391,6 @@ void splitCommandAndArgs(char input[1000],int *inputArrayCount,char inputArray[]
  	*inputArrayCount = *inputArrayCount+1;
  	tokens = strtok(NULL," ");
  }
-
- 
 }
 
 char * searchThePathForInput(char input[100])
@@ -415,8 +485,13 @@ void executeLeftRedirectionForeGround(char *full,char* input,char *half2,char fi
 {
 	char* fileName = removeWhiteSpace(half2);
  	int copyFD = dup(0);
- 	// close(0);
-	int fd = open(fileName, O_RDONLY | O_CREAT ,0660);
+	int fd = open(fileName, O_RDONLY  ,0660);
+	if(fd==-1)
+	{
+	 fprintf(stderr, "\nERROR : no such file to read from (%s)\n",fileName );
+     close(fd);
+     return;	
+	}
 	dup2(fd,0);
 	close(fd);
 
@@ -449,10 +524,16 @@ void executeLeftRedirectionForeGround(char *full,char* input,char *half2,char fi
 void executeRightTwoRedirectionForeGround(char *full,char* input,char *half2,char firstHalfArray[][100], int firstHalfArrayCt)
 {
 	char* fileName = removeWhiteSpace(half2);
+	int fileFd = open(fileName, O_WRONLY | O_APPEND,0660);
+    if(fileFd==-1)
+    {
+    	fprintf(stderr, "\nERROR : no such file to append to (%s)\n",fileName );
+    	close(fileFd);
+    	return;
+    }
  	int copyFD = dup(1);
  	
-    close(1);
-    open(fileName, O_WRONLY | O_CREAT | O_APPEND,0660);
+    dup2(fileFd,1);
 
 	pid_t pid;
 	pid = fork();
@@ -504,7 +585,7 @@ void redirectionExecution(char *input,char inputArray[][100],int *inputArrayCoun
  	strcpy(operator,">>");
  }
 
- for(i;i<*inputArrayCount;i++)
+ for(;i<*inputArrayCount;i++)
  {
  	if(strncmp(inputArray[i],operator,cmpCount)==0)
  	{
@@ -526,7 +607,7 @@ void redirectionExecution(char *input,char inputArray[][100],int *inputArrayCoun
  	strcpy(firstHalfArray[i],inputArray[i]);
  }
  
- for(i;i<*inputArrayCount;i++)
+ for(;i<*inputArrayCount;i++)
  {
  	strcat(half2,inputArray[i]);
  }
@@ -584,7 +665,7 @@ void pipeImplementation(char *input,char argsOne[][100], int *argsOneCount, char
 		}
 		else
 		{
-			pid_t a = wait(&status);
+			wait(&status);
 			dup2(p[0],0);
 			close(p[0]);
 			close(p[1]);
@@ -611,7 +692,7 @@ void pipingExecution(char *input,char inputArray[][100],int *inputArrayCount)
 {
  char input2[1000],token1[1000],token2[1000];
  int argsOneCount = 0,argsTwoCount = *inputArrayCount-1,i=0, j=0;;
- for(i;i<*inputArrayCount;i++)
+ for(;i<*inputArrayCount;i++)
  {
  	if(strncmp(inputArray[i],"|",1)==0)
  	{
@@ -632,7 +713,7 @@ void pipingExecution(char *input,char inputArray[][100],int *inputArrayCount)
  	strcpy(oneArgs[i],inputArray[i]);
  }
  i++;
- for(i,j;j<argsTwoCount;i++,j++)
+ for(;j<argsTwoCount;i++,j++)
  {
  	strcpy(twoArgs[j],inputArray[i]);
  }
@@ -661,16 +742,26 @@ void pipingExecution(char *input,char inputArray[][100],int *inputArrayCount)
  }
 }
 
+void changeDirForeFunction(char *input,char *path)
+{
+ if(chdir(path) == -1)
+ 	{
+ 		perror("SamShell: ERROR : 'chdir() failed");
+ 	}
+
+}
+
 int main()
 {
 
  char input[1000];
- // char history[999][1000]; 
- char history[4][1000]; 
+ char history[999][1000]; 
+ // char history[4][1000]; 
  int historyPointerLocation = 0;
  int noOfElementsInHistory = 0;
  while(1)
  {
+ 	// signal(SIGCHLD, SIG_DFL);
  	printf("\nSamShell-v0.0> ");
  	
  	
@@ -678,11 +769,10 @@ int main()
  	char* input2 = removeWhiteSpace(input);
  	
  	strcpy(input,input2);
- 	char inputArray[2][100];
+ 	char inputArray[100][100];
  	int inputArrayCount = 0,i=0;
 
  	splitCommandAndArgs(input,&inputArrayCount,inputArray);
- 	// strcpy(inputArray[inputArrayCount],NULL); // can be replaced by "" ?
 
  	if(input[0]=='\0')
  	{
@@ -694,17 +784,18 @@ int main()
  	{
  		redirectionExecution(input, inputArray,&inputArrayCount,&redirectQ);
 		int i=0;
- 		for(i;i<inputArrayCount;i++)
+ 		for(;i<inputArrayCount;i++)
  		{
  			strcat(input," ");
  			strcat(input,inputArray[i]);
  		}
- 		strcpy(history[historyPointerLocation],input);
- 		historyPointerLocation=historyPointerLocation + 1;
- 		if(noOfElementsInHistory!=4)
- 		{
- 			noOfElementsInHistory = noOfElementsInHistory+1;
- 		}
+	 	if(historyPointerLocation>998){historyPointerLocation=0;}
+		strcpy(history[historyPointerLocation],input);
+		historyPointerLocation=historyPointerLocation + 1;
+		if(noOfElementsInHistory!=999)
+		{
+			noOfElementsInHistory = noOfElementsInHistory+1;
+		}
  		continue;
  	}
 
@@ -713,17 +804,18 @@ int main()
  	{
  		pipingExecution(input,inputArray,&inputArrayCount);
  		int i=0;
- 		for(i;i<inputArrayCount;i++)
+ 		for(;i<inputArrayCount;i++)
  		{
  			strcat(input," ");
  			strcat(input,inputArray[i]);
  		}
- 		strcpy(history[historyPointerLocation],input);
- 		historyPointerLocation=historyPointerLocation + 1;
- 		if(noOfElementsInHistory!=4)
- 		{
- 			noOfElementsInHistory = noOfElementsInHistory+1;
- 		}
+	 	if(historyPointerLocation>998){historyPointerLocation=0;}
+		strcpy(history[historyPointerLocation],input);
+		historyPointerLocation=historyPointerLocation + 1;
+		if(noOfElementsInHistory!=999)
+		{
+			noOfElementsInHistory = noOfElementsInHistory+1;
+		}
  		continue;
  	}
  	if((strlen(input))==4)
@@ -731,7 +823,7 @@ int main()
  		char temporary[1000];
  		strcpy(temporary,input);
  		int i=0;
- 		for(i;i<strlen(temporary);i++)
+ 		for(;i<strlen(temporary);i++)
  		{
  			temporary[i] = tolower(temporary[i]);
  		}
@@ -762,7 +854,14 @@ int main()
  				{
 		 			if(strncmp(input,HISTORY,7)==0)
 		 			{
-		 			 printHistory(history,&historyPointerLocation,&noOfElementsInHistory);
+		 			printHistory(history,&historyPointerLocation,&noOfElementsInHistory);
+		 			if(historyPointerLocation>998){historyPointerLocation=0;}
+			 		strcpy(history[historyPointerLocation],input);
+			 		historyPointerLocation=historyPointerLocation + 1;
+			 		if(noOfElementsInHistory!=999)
+			 		{
+			 			noOfElementsInHistory = noOfElementsInHistory+1;
+			 		}
 		 			 continue;
 		 			}
  				}
@@ -772,14 +871,15 @@ int main()
 			 	{
 			 		redirectionExecution(input, inputArray,&inputArrayCount,&redirectQIn);
 					int i=0;
-			 		for(i;i<inputArrayCount;i++)
+			 		for(;i<inputArrayCount;i++)
 			 		{
 			 			strcat(input," ");
 			 			strcat(input,inputArray[i]);
 			 		}
+		 			if(historyPointerLocation>998){historyPointerLocation=0;}
 			 		strcpy(history[historyPointerLocation],input);
 			 		historyPointerLocation=historyPointerLocation + 1;
-			 		if(noOfElementsInHistory!=4)
+			 		if(noOfElementsInHistory!=999)
 			 		{
 			 			noOfElementsInHistory = noOfElementsInHistory+1;
 			 		}
@@ -791,20 +891,49 @@ int main()
 			 	{
 			 		pipingExecution(input,inputArray,&inputArrayCount);
 			 		int i=0;
-			 		for(i;i<inputArrayCount;i++)
+			 		for(;i<inputArrayCount;i++)
 			 		{
 			 			strcat(input," ");
 			 			strcat(input,inputArray[i]);
 			 		}
+		 			if(historyPointerLocation>998){historyPointerLocation=0;}
 			 		strcpy(history[historyPointerLocation],input);
 			 		historyPointerLocation=historyPointerLocation + 1;
-			 		if(noOfElementsInHistory!=4)
+			 		if(noOfElementsInHistory!=999)
 			 		{
 			 			noOfElementsInHistory = noOfElementsInHistory+1;
 			 		}
 			 		continue;
 			 	}
 
+			 	if((strlen(input))==2)
+			 	{
+			 		if(strncmp(input,"cd",2)==0)
+			 		{
+			 			if(inputArrayCount>=1)
+			 			{
+			 			 changeDirForeFunction(input,inputArray[0]);
+			 			}
+			 			else
+			 			{
+			 			 fprintf(stderr,"SamShell: ERROR : invalid argument for cd\n");
+			 			}
+			 			int i=0;
+				 		for(;i<inputArrayCount;i++)
+				 		{
+				 			strcat(input," ");
+				 			strcat(input,inputArray[i]);
+				 		}
+			 			if(historyPointerLocation>998){historyPointerLocation=0;}
+				 		strcpy(history[historyPointerLocation],input);
+				 		historyPointerLocation=historyPointerLocation + 1;
+				 		if(noOfElementsInHistory!=999)
+				 		{
+				 			noOfElementsInHistory = noOfElementsInHistory+1;
+				 		}
+						   continue;
+			 		}
+ 				}
 
 	 			searchInMyPath(input,inputArray,inputArrayCount);
 	 			continue;
@@ -812,11 +941,40 @@ int main()
 	 		else
 	 		{
 	 			
-	 				searchInMyPath(input,inputArray,inputArrayCount);
-	 				continue;
+	 			searchInMyPath(input,inputArray,inputArrayCount);
+	 			continue;
 	 		}
 	 	}
  	}	
+
+ 	if((strlen(input))==2)
+ 	{
+ 		if(strncmp(input,"cd",2)==0)
+ 		{
+ 			if(inputArrayCount>=1)
+ 			{
+ 			 changeDirForeFunction(input,inputArray[0]);
+ 			}
+ 			else
+ 			{
+ 			 fprintf(stderr,"SamShell: ERROR : invalid argument for cd\n");
+ 			}
+ 			int i=0;
+	 		for(;i<inputArrayCount;i++)
+	 		{
+	 			strcat(input," ");
+	 			strcat(input,inputArray[i]);
+	 		} 			
+ 			if(historyPointerLocation>998){historyPointerLocation=0;}
+	 		strcpy(history[historyPointerLocation],input);
+	 		historyPointerLocation=historyPointerLocation + 1;
+	 		if(noOfElementsInHistory!=999)
+	 		{
+	 			noOfElementsInHistory = noOfElementsInHistory+1;
+	 		}
+			continue;
+ 		}
+ 	}
 
  	if((strlen(input))==2)
  	{
@@ -836,18 +994,19 @@ int main()
  				}
 	 			strcpy(input,temp);
 	 			splitCommandAndArgs(input,&inputArrayCount,inputArray);
+
 	 			if(strncmp(input,HISTORY,7)==0)
 	 			{
 	 				printHistory(history,&historyPointerLocation,&noOfElementsInHistory);
 	 				continue;
 	 			}
 
-	 			 				int redirectQIn = searchForRedirection(inputArray,&inputArrayCount);
+	 			int redirectQIn = searchForRedirection(inputArray,&inputArrayCount);
 			 	if(redirectQIn!=0)
 			 	{
 			 		redirectionExecution(input, inputArray,&inputArrayCount,&redirectQIn);
 					int i=0;
-			 		for(i;i<inputArrayCount;i++)
+			 		for(;i<inputArrayCount;i++)
 			 		{
 			 			strcat(input," ");
 			 			strcat(input,inputArray[i]);
@@ -866,20 +1025,43 @@ int main()
 			 	{
 			 		pipingExecution(input,inputArray,&inputArrayCount);
 			 		int i=0;
-			 		for(i;i<inputArrayCount;i++)
+			 		for(;i<inputArrayCount;i++)
 			 		{
 			 			strcat(input," ");
 			 			strcat(input,inputArray[i]);
 			 		}
-			 		strcpy(history[historyPointerLocation],input);
-			 		historyPointerLocation=historyPointerLocation + 1;
-			 		if(noOfElementsInHistory!=4)
-			 		{
-			 			noOfElementsInHistory = noOfElementsInHistory+1;
-			 		}
+
 			 		continue;
 			 	}
 
+			 	if((strlen(input))==2)
+			 	{
+			 		if(strncmp(input,"cd",2)==0)
+			 		{
+			 			if(inputArrayCount>=1)
+			 			{
+			 			 changeDirForeFunction(input,inputArray[0]);
+			 			}
+			 			else
+			 			{
+			 			 fprintf(stderr,"SamShell: ERROR : invalid argument for cd\n");
+			 			}
+			 			int i=0;
+				 		for(;i<inputArrayCount;i++)
+				 		{
+				 			strcat(input," ");
+				 			strcat(input,inputArray[i]);
+				 		}
+				 		if(historyPointerLocation>998){historyPointerLocation=0;}
+				 		strcpy(history[historyPointerLocation],input);
+				 		historyPointerLocation=historyPointerLocation + 1;
+				 		if(noOfElementsInHistory!=999)
+				 		{
+				 			noOfElementsInHistory = noOfElementsInHistory+1;
+				 		}
+						continue;
+			 		}
+ 				}
 	 			searchInMyPath(input,inputArray,inputArrayCount);
 	 			continue;
  			}
@@ -891,9 +1073,114 @@ int main()
  		}
  	}
 
- 	searchInMyPath(input,inputArray,inputArrayCount);
+ 	if(input[0]=='!')
+ 	{
+ 		int i=1;
+ 		char *tempo;
+ 		char prefixString[1000];
+ 		tempo = strndup(input+1,strlen(input)-1);
+ 		strcpy(prefixString,tempo);
+ 		for(i=0;i<inputArrayCount;i++)
+ 		{
+ 			strcat(prefixString," ");
+ 			strcat(prefixString,inputArray[i]);
+ 		}
+ 		prefixString[strlen(prefixString)] = '\0';
+ 		char *temp = searchHistoryUsingPrefix(prefixString,&historyPointerLocation,&noOfElementsInHistory,history);
+ 		if(temp[0]!='\0')
+ 		{
+ 			printf("\ntemp %s\n",temp);
+ 			strcpy(input,temp);
+ 			splitCommandAndArgs(input,&inputArrayCount,inputArray);
 
- 	if(historyPointerLocation>3){historyPointerLocation=0;}
+
+
+ 			if(strncmp(input,HISTORY,7)==0)
+	 			{
+	 				printHistory(history,&historyPointerLocation,&noOfElementsInHistory);
+	 				continue;
+	 			}
+
+	 			int redirectQIn = searchForRedirection(inputArray,&inputArrayCount);
+			 	if(redirectQIn!=0)
+			 	{
+			 		redirectionExecution(input, inputArray,&inputArrayCount,&redirectQIn);
+					int i=0;
+			 		for(;i<inputArrayCount;i++)
+			 		{
+			 			strcat(input," ");
+			 			strcat(input,inputArray[i]);
+			 		}
+			 		if(historyPointerLocation>998){historyPointerLocation=0;}
+			 		strcpy(history[historyPointerLocation],input);
+			 		historyPointerLocation=historyPointerLocation + 1;
+			 		if(noOfElementsInHistory!=999)
+			 		{
+			 			noOfElementsInHistory = noOfElementsInHistory+1;
+			 		}
+			 		continue;
+			 	}
+
+			 	int pipeQIn = searchForPiping(inputArray,&inputArrayCount);
+			 	if(pipeQIn==1)
+			 	{
+			 		pipingExecution(input,inputArray,&inputArrayCount);
+			 		int i=0;
+			 		for(;i<inputArrayCount;i++)
+			 		{
+			 			strcat(input," ");
+			 			strcat(input,inputArray[i]);
+			 		}
+			 		if(historyPointerLocation>998){historyPointerLocation=0;}
+			 		strcpy(history[historyPointerLocation],input);
+			 		historyPointerLocation=historyPointerLocation + 1;
+			 		if(noOfElementsInHistory!=999)
+			 		{
+			 			noOfElementsInHistory = noOfElementsInHistory+1;
+			 		}
+			 		continue;
+			 	}
+
+			 	if((strlen(input))==2)
+			 	{
+			 		if(strncmp(input,"cd",2)==0)
+			 		{
+			 			if(inputArrayCount>=1)
+			 			{
+			 			 changeDirForeFunction(input,inputArray[0]);
+			 			}
+			 			else
+			 			{
+			 			 fprintf(stderr,"SamShell: ERROR : invalid argument for cd\n");
+			 			}
+			 			int i=0;
+				 		for(;i<inputArrayCount;i++)
+				 		{
+				 			strcat(input," ");
+				 			strcat(input,inputArray[i]);
+				 		}
+				 		if(historyPointerLocation>998){historyPointerLocation=0;}
+				 		strcpy(history[historyPointerLocation],input);
+				 		historyPointerLocation=historyPointerLocation + 1;
+				 		if(noOfElementsInHistory!=999)
+				 		{
+				 			noOfElementsInHistory = noOfElementsInHistory+1;
+				 		}
+						continue;
+			 		}
+ 				}
+	 			searchInMyPath(input,inputArray,inputArrayCount);
+	 			continue;
+ 		}
+ 		
+ 	}
+
+ 	if(strncmp(input,HISTORY,7)!=0)
+	{
+ 	 searchInMyPath(input,inputArray,inputArrayCount);
+ 	}
+
+ 	if(historyPointerLocation>998){historyPointerLocation=0;}
  	if(inputArrayCount!=0)
  	{
  		for(i=0;i<inputArrayCount;i++)
@@ -903,9 +1190,9 @@ int main()
  		}
  	}
  	strcpy(history[historyPointerLocation],input);
- 	// if(historyPointerLocation>998){historyPointerLocation=0;}	
+ 		
  	historyPointerLocation=historyPointerLocation + 1;
-    if(noOfElementsInHistory!=4)
+    if(noOfElementsInHistory!=999)
  	{
  		noOfElementsInHistory = noOfElementsInHistory+1;
  	}
