@@ -1,3 +1,10 @@
+/*
+Assignment Homework 1
+Name : Sameer Sawla
+RCS ID : sawlas@rpi.edu
+RIN Number : 661230418
+*/
+
 #include<stdio.h>
 #include<string.h>
 #include<stdlib.h>
@@ -184,6 +191,7 @@ char *searchHistoryUsingPrefix(char *prefix,int *historyPointerLocation,int *noO
 		 {
 		 	return "";
 		 }
+		 return "";
 }
 void executeWithAChildProcessBackground(char *input,char *tokens,char inputArray[][100],int inputArrayCount)
 {
@@ -207,7 +215,6 @@ void executeWithAChildProcessBackground(char *input,char *tokens,char inputArray
 		printf("\n[process running in background with pid %d]\n",childPid);
 		if(inputArrayCount>0)
 		{
-			char * ptr = full;
 			char * ptr1[100];
 			ptr1[0] = input;
 			int i=1;
@@ -241,7 +248,6 @@ void executeWithAChildProcessForeground(char *input,char *tokens,char inputArray
 	strcpy(full,tokens);
 	strcat(full,"/");
 	strcat(full,input);
-	char *arguments;
 	if(pid<0)
 	{
 		perror("SamShell: ERROR : 'fork() failed");
@@ -251,7 +257,6 @@ void executeWithAChildProcessForeground(char *input,char *tokens,char inputArray
 		printf("\n");
 		if(inputArrayCount>0)
 		{
-			char * ptr = full;
 			char * ptr1[100];
 			ptr1[0] = input;
 			int i=1;
@@ -317,7 +322,6 @@ void searchInMyPath(char *input,char inputArray[][100],int inputArrayCount)
 		{
 			if(strncmp(inputArray[inputArrayCount-1],"&",1)==0)
 			{
-				printf("\nIn background\n");
 				executeWithAChildProcessBackground(input,tokens,inputArray,inputArrayCount);
 			}
 			else
@@ -641,7 +645,6 @@ void redirectionExecution(char *input,char inputArray[][100],int *inputArrayCoun
 void pipeImplementation(char *input,char argsOne[][100], int *argsOneCount, char *token1, char *input2, char argsTwo[][100],int *argsTwoCount,char *token2)
 {
  	int p[2],status;
-	pid_t child1;
 	pid_t child = fork();
 
 	if(child==0)
@@ -685,7 +688,6 @@ void pipeImplementation(char *input,char argsOne[][100], int *argsOneCount, char
 		wait(NULL);
 	}
 
-	waitpid(child1, &status, WUNTRACED);
 }
 
 void pipingExecution(char *input,char inputArray[][100],int *inputArrayCount)
